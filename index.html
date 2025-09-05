@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>FIIs • Carteira em Cartões (v1.5)</title>
+<title>FIIs • Carteira em Cartões (v1.6)</title>
 <style>
   :root{
     --bg:#0a0f24; --panel:#0f1532; --muted:#182151; --text:#e9ecf4; --sub:#b9c2e6;
@@ -50,11 +50,9 @@
   }
   .toast.show{display:block}
 
-  /* Grade de cartões */
+  /* Grade de cartões de ativos */
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
-  .asset{
-    display:flex;flex-direction:column;gap:10px
-  }
+  .asset{display:flex;flex-direction:column;gap:10px}
   .asset .header{display:flex;align-items:center;gap:8px}
   .ticker{
     font-weight:800;font-size:18px;letter-spacing:.5px;
@@ -63,7 +61,6 @@
   .price{margin-left:auto;font-weight:700}
   .muted{color:var(--sub)}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .row .grow{flex:1}
   .stat{
     display:flex;flex-direction:column;gap:2px;flex:1;min-width:120px;
     background:#0a133a;border:1px solid #223069;padding:8px;border-radius:10px
@@ -74,14 +71,19 @@
   .actions{display:flex;gap:8px;flex-wrap:wrap}
   .mini{padding:8px 10px;border-radius:10px}
   .num{width:100%;background:#0b1336;border:1px solid #26337a;color:var(--text);padding:8px;border-radius:8px;font:500 13px Inter}
-  .section-title{font-weight:700;margin:2px 0 4px;font-size:13px;color:#cfd6ff}
+
+  /* Bandeja nova */
+  .grid-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+  .chipline{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .chip{background:#0c1644;border:1px solid #2b3c8a;color:#d8defd;padding:6px 10px;border-radius:999px;font-weight:700}
+  .minigrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:10px}
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>FIIs • Carteira (Cartões) <span class="small" style="opacity:.7">v1.5</span></h1>
-      <div class="subtitle">Sem rolagem lateral. Cada ativo vira um cartão completo. Preço atualiza automático; PM, cotas e dividendos ficam salvos.</div>
+      <h1>FIIs • Carteira (Cartões) <span class="small" style="opacity:.7">v1.6</span></h1>
+      <div class="subtitle">Sem rolagem lateral. Preço atualiza automático; PM, cotas e dividendos ficam salvos. Compre/Desalocar como carteira.</div>
       <div class="controls">
         <input id="tickers" class="grow" placeholder="Ex.: HCTR11, RZAG11, MXRF11 (separe por vírgula ou espaço)"/>
         <button class="btn" id="btnFetch">Adicionar/Atualizar</button>
@@ -97,8 +99,9 @@
       </div>
     </div>
 
+    <!-- BANDEJA: totais + chips + mini-indicadores -->
     <div class="card-lite" style="margin-bottom:14px">
-      <div class="row" style="gap:10px">
+      <div class="grid-summary">
         <div class="stat"><span class="label">Investido (custo)</span><span class="value" id="totCost">R$ 0,00</span></div>
         <div class="stat"><span class="label">Valor atual</span><span class="value" id="totValue">R$ 0,00</span></div>
         <div class="stat">
@@ -107,6 +110,19 @@
         </div>
         <div class="stat"><span class="label">Renda/Mês</span><span class="value" id="totRenda">R$ 0,00</span></div>
         <div class="stat"><span class="label">Última atualização</span><span class="value" id="lastUpdated">—</span></div>
+      </div>
+
+      <div class="section-title" style="margin-top:10px;font-weight:700;color:#cfd6ff">Posições (Ticker × Cotas)</div>
+      <div id="positions" class="chipline"></div>
+
+      <div class="section-title" style="margin-top:6px;font-weight:700;color:#cfd6ff">Indicadores</div>
+      <div class="minigrid">
+        <div class="stat"><span class="label">Ativos</span><span class="value" id="indAtivos">0</span></div>
+        <div class="stat"><span class="label">Cotas totais</span><span class="value" id="indCotas">0</span></div>
+        <div class="stat"><span class="label">PM ponderado</span><span class="value" id="indPM">R$ 0,00</span></div>
+        <div class="stat"><span class="label">Yield mensal</span><span class="value" id="indYield">0,00%</span></div>
+        <div class="stat"><span class="label">Maior posição</span><span class="value" id="indMaior">0,00%</span></div>
+        <div class="stat"><span class="label">Top-3 concentração</span><span class="value" id="indTop3">0,00%</span></div>
       </div>
     </div>
 
@@ -133,10 +149,10 @@
     const nowStr = () => new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     const num = x => Number(String(x).replace(',','.'))||0;
 
-    function save(){ localStorage.setItem('fiis_cards_v15', JSON.stringify(state)); }
+    function save(){ localStorage.setItem('fiis_cards_v16', JSON.stringify(state)); }
     function load(){
       try{
-        const s = JSON.parse(localStorage.getItem('fiis_cards_v15'));
+        const s = JSON.parse(localStorage.getItem('fiis_cards_v16'));
         if(s){
           state.aporte = s.aporte ?? 300;
           state.items = Array.isArray(s.items) ? s.items : [];
@@ -159,25 +175,27 @@
       else state.items.push({ticker:item.ticker, name:item.name||'', price:item.price||'', dy:item.dy||'',
                              divm:item.divm||'', cotas:item.cotas||0, pm:item.pm||(item.price||'')});
     }
-
     function calc(it){
       const price = num(it.price), pm=num(it.pm), cotas=Number(it.cotas)||0, d=num(it.divm);
       const custo = pm*cotas, valor = price*cotas, pl = valor-custo, plPct = custo>0? (pl/custo*100):0, renda = d*cotas;
       return {price, pm, cotas, d, custo, valor, pl, plPct, renda};
     }
 
-    // ===== Rendering (cards) =====
+    // ===== Rendering (cards + bandeja) =====
     function render(){
       grid.innerHTML = '';
+      // --- ativos/cards
       let totCost=0, totValue=0, totRenda=0;
+      const pos = []; // para indicadores/chips
+
       state.items.forEach((it,idx)=>{
         const {price, pm, cotas, d, custo, valor, pl, plPct, renda} = calc(it);
         totCost += custo; totValue += valor; totRenda += renda;
+        if(cotas>0) pos.push({ticker:it.ticker, valor, cotas});
 
         const plClass = pl>=0 ? 'ok' : 'err';
         const card = document.createElement('div');
         card.className = 'card-lite asset';
-
         card.innerHTML = `
           <div class="header">
             <span class="ticker">${it.ticker||''}</span>
@@ -185,7 +203,6 @@
             <span class="price">${price?fmtBRL(price):'-'}</span>
           </div>
 
-          <div class="section-title">Parâmetros (edite):</div>
           <div class="row">
             <div class="stat">
               <span class="label">PM (Preço Médio)</span>
@@ -201,24 +218,24 @@
             </div>
           </div>
 
-          <div class="section-title">Resultados:</div>
           <div class="row">
-            <div class="stat"><span class="label">Custo (PM*Cotas)</span><span class="value">${custo?fmtBRL(custo):'-'}</span></div>
-            <div class="stat"><span class="label">Valor (Preço*Cotas)</span><span class="value">${valor?fmtBRL(valor):'-'}</span></div>
+            <div class="stat"><span class="label">Custo</span><span class="value">${custo?fmtBRL(custo):'-'}</span></div>
+            <div class="stat"><span class="label">Valor</span><span class="value">${valor?fmtBRL(valor):'-'}</span></div>
             <div class="stat"><span class="label">P/L</span><span class="value ${plClass}">${pl?fmtBRL(pl):'-'} <span class="muted">${custo? '('+fmtPct(plPct)+')' : ''}</span></span></div>
             <div class="stat"><span class="label">Renda/Mês</span><span class="value">${renda?fmtBRL(renda):'-'}</span></div>
           </div>
 
           <div class="actions">
-            <button class="btn ghost mini" onclick="alloc(${idx})" title="Comprar usando o aporte atual">Alocar</button>
-            <button class="btn ghost mini" onclick="dealloc(${idx})" title="Vender parte das cotas">Desalocar</button>
-            <button class="btn ghost mini" onclick="refreshOne(${idx})" title="Atualizar preço deste ativo">↻ Preço</button>
-            <button class="btn mini" style="background:#1a1030;border-color:#3b1b2f" onclick="removeItem(${idx})" title="Remover">Remover</button>
+            <button class="btn ghost mini" onclick="alloc(${idx})" title="Comprar com o aporte">Alocar</button>
+            <button class="btn ghost mini" onclick="dealloc(${idx})" title="Vender parte">Desalocar</button>
+            <button class="btn ghost mini" onclick="refreshOne(${idx})" title="Atualizar preço">↻ Preço</button>
+            <button class="btn mini" style="background:#1a1030;border-color:#3b1b2f" onclick="removeItem(${idx})">Remover</button>
           </div>
         `;
         grid.appendChild(card);
       });
 
+      // --- totais
       el('totCost').textContent = fmtBRL(totCost);
       el('totValue').textContent = fmtBRL(totValue);
       el('totRenda').textContent = fmtBRL(totRenda);
@@ -226,12 +243,37 @@
       const totPLpct = totCost>0 ? (totPL/totCost*100) : 0;
       el('totPL').textContent = fmtBRL(totPL);
       el('totPLpct').textContent = totCost ? `(${fmtPct(totPLpct)})` : '';
+
+      // --- chips de posições
+      const chips = pos
+        .sort((a,b)=>b.valor-a.valor)
+        .map(p=>`<span class="chip">${p.ticker} × ${p.cotas}</span>`)
+        .join('');
+      el('positions').innerHTML = chips || '<span class="small">Nenhuma posição alocada</span>';
+
+      // --- mini-indicadores
+      const ativos = pos.length;
+      const cotasTot = pos.reduce((s,p)=>s+p.cotas,0);
+      const pmPond = cotasTot>0
+        ? (state.items.reduce((s,it)=>s + num(it.pm)*(Number(it.cotas)||0),0)/cotasTot)
+        : 0;
+      const yieldMensal = (totValue>0) ? (totRenda/totValue*100) : 0;
+      const maior = (totValue>0 && ativos>0) ? (pos[0].valor/totValue*100) : 0;
+      const top3 = (totValue>0) ? (pos.slice(0,3).reduce((s,p)=>s+p.valor,0)/totValue*100) : 0;
+
+      el('indAtivos').textContent = ativos;
+      el('indCotas').textContent = cotasTot;
+      el('indPM').textContent = fmtBRL(pmPond);
+      el('indYield').textContent = fmtPct(yieldMensal);
+      el('indMaior').textContent = fmtPct(maior);
+      el('indTop3').textContent = fmtPct(top3);
     }
 
+    // edição & remoção
     window.onEdit = (i,k,v)=>{ state.items[i][k]=v; render(); save(); };
     window.removeItem = (i)=>{ state.items.splice(i,1); render(); save(); };
 
-    // ===== Buy / Sell =====
+    // comprar / vender
     window.alloc = (i)=>{
       const it = state.items[i]; const price = num(it.price);
       if(!price){ toast('Atualize o preço antes de alocar.'); return; }
@@ -243,7 +285,6 @@
       render(); save();
       toast(`Alocado +${qtd} cota(s) em ${it.ticker} a ${fmtBRL(price)}. PM ${fmtBRL(pmNew)}.`);
     };
-
     window.dealloc = (i)=>{
       const it = state.items[i]; const c = Number(it.cotas)||0;
       if(c<=0){ toast('Sem cotas para desalocar.'); return; }
@@ -255,7 +296,6 @@
     };
 
     // ===== Networking (preço + nome + dividendo) =====
-    const sleep = ms => new Promise(r=>setTimeout(r,ms));
     const withTimeout = (p,ms=12000)=> Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);
     async function getJSON(url, opt={}){ const r = await withTimeout(fetch(url,{headers:{'Accept':'application/json'},...opt})); if(!r.ok) throw new Error('HTTP '+r.status+' em '+url); return r.json(); }
     function proxiesFor(url){ return [ url, 'https://cors.isomorphic-git.org/'+url, 'https://thingproxy.freeboard.io/fetch/'+url, 'https://api.allorigins.win/raw?url='+encodeURIComponent(url) ]; }
@@ -302,7 +342,6 @@
         if(!base.length){ try{ base = await fetchYahooQuotes(tickers); }catch(_){}
         }
         if(!base.length){ base = tickers.map(tk=>({ticker:tk,name:'',price:'',dy:''})); }
-        // completa dividendo
         for(const it of base){
           try{ const d = await fetchYahooLastDiv(it.ticker); if(d) it.divm = d; }catch(_){}
           upsert(it);
@@ -351,13 +390,18 @@
     el('aporte').addEventListener('change',()=>{ state.aporte = Number(el('aporte').value)||300; save(); });
     el('btnSaveKey').addEventListener('click',()=>{ state.apiKey = el('apiKey').value.trim(); save(); toast(state.apiKey ? 'Chave brapi salva. 👌' : 'Chave removida.'); });
     el('btnTest').addEventListener('click', async ()=>{ el('loading').classList.add('show'); try{ await refreshPrices(); toast('Preços atualizados ✔️'); } catch(e){ toast('Erro: '+e.message,'error'); } finally{ el('loading').classList.remove('show'); } });
-
     function startAuto(){ stopAuto(); if(!state.auto) return; state.timer = setInterval(refreshPrices, state.refresh*1000); }
     function stopAuto(){ if(state.timer){ clearInterval(state.timer); state.timer=null; } }
     el('toggleAuto').addEventListener('click',()=>{ state.auto=!state.auto; el('toggleAuto').textContent = state.auto ? 'Pausar' : 'Retomar'; save(); if(state.auto){ startAuto(); toast('Auto-atualização ON'); } else { stopAuto(); toast('Auto-atualização OFF'); } });
 
     load();
     startAuto();
+    // Expose for inline handlers:
+    window.onEdit = (i,k,v)=>{ state.items[i][k]=v; render(); save(); };
+    window.removeItem = (i)=>{ state.items.splice(i,1); render(); save(); };
+    window.alloc = (i)=>{ const it = state.items[i]; const price = num(it.price); if(!price){ toast('Atualize o preço antes de alocar.'); return; } const qtd = Math.floor(state.aporte / price); if(qtd<=0){ toast('Aporte insuficiente para 1 cota.'); return; } const cOld = Number(it.cotas)||0, pmOld=num(it.pm)||0; const cNew=cOld+qtd, pmNew = cOld>0 ? ((pmOld*cOld + price*qtd)/cNew) : price; it.cotas=cNew; it.pm=pmNew.toFixed(2); render(); save(); toast(`Alocado +${qtd} cota(s) em ${it.ticker}.`); };
+    window.dealloc = (i)=>{ const it = state.items[i]; const c = Number(it.cotas)||0; if(c<=0){ toast('Sem cotas para desalocar.'); return; } const qtd = Math.max(0, Math.min(c, Number(prompt(`Desalocar quantas cotas de ${it.ticker}? (disp: ${c})`, 1))||0)); if(qtd<=0) return; it.cotas = c - qtd; render(); save(); toast(`Desalocado -${qtd} cota(s) de ${it.ticker}.`); };
+    window.refreshOne = window.refreshOne;
   </script>
 </body>
 </html>
