@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FIIs • Calculadora Dinâmica (v1.2)</title>
+  <style>
+    :root{
+      --bg:#0a0f24; --panel:#0f1532; --muted:#182151; --text:#e9ecf4; --sub:#b9c2e6;
+      --accent:#7dd3fc; --accent2:#60a5fa; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444;
+      --table-head:#0c1233; --chip:#0e1742;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% -10%,#1b2a6a 0%,#0a0f24 45%),
+        linear-gradient(180deg,#0a0f24,#0a0f24);
+      font:500 15px/1.5 Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Arial;
+    }
+    .wrap{max-width:1200px;margin:auto;padding:24px}
+    .card{background:linear-gradient(180deg,var(--panel),#0b1230);border:1px solid #233069;border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.35);padding:20px;margin-bottom:18px}
+    h1{font-size:28px;margin:0 0 8px;letter-spacing:.2px}
+    .subtitle{color:var(--sub);font-size:13px;margin-bottom:8px}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    input,button{background:#0b1336;color:var(--text);border:1px solid #2a3a86;border-radius:12px;padding:10px 12px;font:500 14px Inter,system-ui;transition:box-shadow .15s ease, transform .04s ease}
+    input:focus{outline:none;box-shadow:0 0 0 2px #3345b5}
+    button{cursor:pointer}
+    .btn{background:linear-gradient(180deg,#1d2a72,#152162);border:1px solid #2e3fb0;font-weight:600}
+    .btn:hover{filter:brightness(1.08)} .btn:active{transform:translateY(1px)}
+    .btn.ghost{background:transparent;border-color:#34408a}
+    .pill{background:var(--chip);border:1px solid #233069;color:var(--sub);padding:6px 10px;border-radius:999px;font-size:12px}
+    .stat{display:flex;gap:6px;align-items:center}
+    .stat b{font-size:16px}
+    table{width:100%;border-collapse:separate;border-spacing:0}
+    thead th{position:sticky;top:0;z-index:1;background:var(--table-head);text-align:left;font-weight:700;border-bottom:1px solid #263272}
+    th,td{padding:10px 8px}
+    tbody tr{border-bottom:1px solid #1e2a66}
+    tbody tr:hover{background:rgba(255,255,255,.03)}
+    .num{text-align:right}
+    .tinput{width:100%;background:#0b1336;border:1px solid #26337a;color:var(--text);padding:8px 8px;border-radius:8px;font:500 13px Inter,system-ui}
+    .tinput:focus{box-shadow:0 0 0 2px #3345b5}
+    .del{background:#1a1030;border-color:#3b1b2f} .del:hover{background:#2a153f}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+    .row-actions{display:flex;gap:6px;justify-content:flex-end}
+    .flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .grow{flex:1}
+    .small{font-size:12px;color:var(--sub)}
+    .right{margin-left:auto}
+    .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;background:#0c1338;border:1px solid #233069;padding:2px 6px;border-radius:6px}
+    .footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .loading{display:none;align-items:center;gap:8px}
+    .loading.show{display:flex}
+    .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+    .toast{position:fixed;right:16px;bottom:16px;max-width:420px;background:#10163a;border:1px solid #2a3a86;color:var(--text);padding:12px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);display:none;white-space:pre-wrap}
+    .toast.show{display:block}
+    .cfg{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+    @media (max-width:720px){ .controls .grow{min-width:100%} thead .hide-sm{display:none} tbody .hide-sm{display:none} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>FIIs • Calculadora Dinâmica <span class="small" style="opacity:.7">v1.2</span></h1>
+      <div class="subtitle">Compare tickers, preços do dia (auto-atualiza) e renda mensal estimada.</div>
+      <div class="controls">
+        <input id="tickers" class="grow" placeholder="Ex.: HCTR11, RZAG11, MXRF11 (separe por vírgula ou espaço)" />
+        <button class="btn" id="btnFetch">Buscar + Calcular</button>
+        <button class="btn ghost" id="btnAdd">Adicionar linha</button>
+        <button class="btn ghost" id="btnSample">Exemplo rápido</button>
+        <div class="pill">Aporte: R$ <input id="aporte" type="number" value="300" min="1" step="1" style="width:110px;margin-left:6px;background:transparent;border:1px dashed #2a3a86;padding:6px 8px;border-radius:8px"/></div>
+      </div>
+      <div class="cfg">
+        <span class="small">Chave da API <b>brapi.dev</b> (opcional):</span>
+        <input id="apiKey" placeholder="cole aqui sua chave brapi (opcional)" style="min-width:280px" />
+        <button class="btn ghost" id="btnSaveKey">Salvar</button>
+        <button class="btn ghost" id="btnTest">Testar conexão</button>
+      </div>
+      <div class="flex" style="margin-top:10px">
+        <div class="loading" id="loading"><span class="dot"></span><span>Atualizando cotações…</span></div>
+        <div class="small right">Dica: cole tickers e pressione <span class="kbd">Enter</span>.</div>
+      </div>
+      <div class="small" style="margin-top:6px;opacity:.8">Projetado para abrir como <code>file://</code> ou <code>content://</code> (Android) com múltiplos proxies CORS.</div>
+    </div>
+
+    <div class="card">
+      <div class="flex" style="margin-bottom:10px">
+        <div class="stat">Total investido: <b id="totInv">R$ 0,00</b></div>
+        <div class="stat">Renda mensal: <b id="totRenda">R$ 0,00</b></div>
+        <div class="small right">Última atualização: <span id="lastUpdated">—</span></div>
+      </div>
+      <div style="overflow:auto;border-radius:12px;border:1px solid #223069">
+        <table>
+          <thead>
+            <tr>
+              <th style="min-width:120px">Ticker</th>
+              <th style="min-width:220px">Nome</th>
+              <th class="num" style="min-width:110px">Preço</th>
+              <th class="num hide-sm" style="min-width:110px">DY % a.a.</th>
+              <th class="num" style="min-width:120px">Div/Mês</th>
+              <th class="num" style="min-width:140px">Cotas (editável)</th>
+              <th class="num hide-sm" style="min-width:120px">Gasto</th>
+              <th class="num" style="min-width:140px">Renda/Mês</th>
+              <th style="min-width:90px"></th>
+            </tr>
+          </thead>
+          <tbody id="body"></tbody>
+        </table>
+      </div>
+      <div class="footer" style="margin-top:10px">
+        <div class="small">Fontes: brapi.dev (preferencial) • Yahoo via proxies (AllOrigins/ThingProxy/Isomorphic). Preços podem ter atraso.</div>
+        <div class="small">Auto-atualização a cada <span id="refreshSec">30</span>s <button id="toggleAuto" class="btn ghost" style="padding:6px 10px">Pausar</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // ========= Utils =========
+    const fmtBRL = v => (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    const el = id => document.getElementById(id);
+    const tbody = el('body');
+    const state = { aporte:300, rows:[], auto:true, refresh:30, timer:null, apiKey:'' };
+
+    function toast(msg,type='info'){
+      const t = el('toast');
+      t.textContent = msg;
+      t.className = 'toast show';
+      t.style.borderColor = (type==='error') ? '#b91c1c' : '#2a3a86';
+      setTimeout(()=>{t.classList.remove('show'); t.style.borderColor='';}, 5000);
+    }
+    const nowStr = () => new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+    function save(){ localStorage.setItem('fiis_calc_state', JSON.stringify({aporte:state.aporte,rows:state.rows,auto:state.auto,refresh:state.refresh,apiKey:state.apiKey})); }
+    function load(){
+      try{
+        const s = JSON.parse(localStorage.getItem('fiis_calc_state'));
+        if(s){
+          state.aporte = s.aporte ?? 300;
+          state.rows = Array.isArray(s.rows) ? s.rows : [];
+          state.auto = (s.auto ?? true);
+          state.refresh = s.refresh ?? 30;
+          state.apiKey = s.apiKey ?? '';
+        }
+      }catch(e){}
+      el('aporte').value = state.aporte;
+      el('refreshSec').textContent = state.refresh;
+      el('toggleAuto').textContent = state.auto ? 'Pausar' : 'Retomar';
+      el('apiKey').value = state.apiKey || '';
+      render();
+    }
+
+    function addRow(r={ticker:'',name:'',price:'',dy:'',divm:'',cotas:0}){ state.rows.push(r); render(); save(); }
+    function removeRow(i){ state.rows.splice(i,1); render(); save(); }
+
+    function calc(r){
+      const p = Number(String(r.price).toString().replace(',','.'))||0;
+      const dy = Number(String(r.dy).toString().replace(',','.'))||0;
+      let d = Number(String(r.divm).toString().replace(',','.'))||0;
+      if(!d && p>0 && dy>0){ d = (dy/100)*p/12; }
+      const c = Number(r.cotas)||0;
+      const gasto = c*p;
+      const renda = c*d;
+      return { gasto, renda };
+    }
+
+    function render(){
+      tbody.innerHTML = '';
+      let totInv=0, totRenda=0;
+      state.rows.forEach((r,i)=>{
+        const {gasto,renda} = calc(r);
+        totInv += gasto; totRenda += renda;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input class="tinput" value="${r.ticker||''}" onchange="onEdit(${i},'ticker',this.value.toUpperCase())"/></td>
+          <td><input class="tinput" value="${r.name||''}" onchange="onEdit(${i},'name',this.value)"/></td>
+          <td class="num"><input class="tinput" value="${r.price||''}" onchange="onEdit(${i},'price',this.value)"/></td>
+          <td class="num hide-sm"><input class="tinput" value="${r.dy||''}" onchange="onEdit(${i},'dy',this.value)"/></td>
+          <td class="num"><input class="tinput" value="${r.divm||''}" onchange="onEdit(${i},'divm',this.value)"/></td>
+          <td class="num"><input class="tinput" type="number" min="0" step="1" value="${r.cotas||0}" onchange="onEdit(${i},'cotas',this.value)"/></td>
+          <td class="num hide-sm">${gasto?fmtBRL(gasto):'-'}</td>
+          <td class="num">${renda?fmtBRL(renda):'-'}</td>
+          <td>
+            <div class="row-actions">
+              <button class="btn ghost" onclick="alloc(${i})" title="Alocar aporte para este ativo">Alocar</button>
+              <button class="btn del" onclick="removeRow(${i})" title="Remover">Remover</button>
+            </div>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+      el('totInv').textContent = fmtBRL(totInv);
+      el('totRenda').textContent = fmtBRL(totRenda);
+    }
+    window.onEdit = (i,k,v)=>{ state.rows[i][k]=v; render(); save(); };
+
+    // ========= Networking with multi-proxy fallbacks (works from file:// / content://) =========
+    const sleep = ms => new Promise(r=>setTimeout(r,ms));
+    const withTimeout = (p,ms=12000)=> Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);
+    async function getJSON(url, opt={}){
+      const r = await withTimeout(fetch(url, {headers:{'Accept':'application/json'}, ...opt}));
+      if(!r.ok) throw new Error('HTTP '+r.status+' em '+url);
+      return r.json();
+    }
+    // Try a chain of URLs until one works
+    async function tryChain(urls, parser){
+      let lastErr = null;
+      for(const u of urls){
+        try{
+          const data = await getJSON(u);
+          return parser ? parser(data) : data;
+        }catch(e){ lastErr = e; }
+      }
+      throw lastErr || new Error('Falha em todos os proxies');
+    }
+
+    // Build proxy list for an URL
+    function proxiesFor(url){
+      return [
+        url, // direto (quando CORS permite)
+        'https://cors.isomorphic-git.org/' + url,
+        'https://thingproxy.freeboard.io/fetch/' + url,
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
+      ];
+    }
+
+    async function fetchFromBrapi(tickers){
+      const results = [];
+      for(let i=0;i<tickers.length;i+=20){
+        const group = tickers.slice(i,i+20);
+        let url = `https://brapi.dev/api/quote/${encodeURIComponent(group.join(','))}?range=1d&interval=1d&fundamentals=true`;
+        if(state.apiKey) url += `&token=${encodeURIComponent(state.apiKey)}`;
+        const urls = proxiesFor(url);
+        const j = await tryChain(urls, d => (d?.results || d?.stocks || d?.data || []));
+        j.forEach(x=>{
+          results.push({
+            ticker: (x.symbol||'').replace(/\.SA$/,'').toUpperCase(),
+            name: x.longName || x.shortName || '',
+            price: (x.regularMarketPrice ?? x.regularMarketPreviousClose ?? ''),
+            dy: (typeof x.dividendYield === 'number' && !isNaN(x.dividendYield)) ? (x.dividendYield*100) : '',
+            divm:'', cotas:0
+          });
+        });
+      }
+      return results;
+    }
+
+    async function fetchFromYahoo(tickers){
+      const syms = tickers.map(t=>t+'.SA').join(',');
+      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(syms);
+      const urls = proxiesFor(url);
+      const j = await tryChain(urls);
+      const arr = (j.quoteResponse && j.quoteResponse.result) || [];
+      return arr.map(q=>({
+        ticker:(q.symbol||'').replace(/\.SA$/,'').toUpperCase(),
+        name:q.longName||q.shortName||'',
+        price:q.regularMarketPrice ?? q.regularMarketPreviousClose ?? '',
+        dy:(q.trailingAnnualDividendYield? q.trailingAnnualDividendYield*100 : ''),
+        divm:'',
+        cotas:0
+      }));
+    }
+
+    async function fetchQuotes(list){
+      const tickers = list.map(s=>s.trim().toUpperCase().replace(/\.SA$/,'')).filter(Boolean);
+      if(!tickers.length) return [];
+      try{
+        const got = await fetchFromBrapi(tickers);
+        if(got.length) return got;
+        throw new Error('brapi vazio');
+      }catch(e){
+        console.warn('brapi falhou:', e);
+        try{
+          const y = await fetchFromYahoo(tickers);
+          if(y.length) return y;
+          throw new Error('yahoo vazio');
+        }catch(e2){
+          console.warn('yahoo falhou:', e2);
+          const out=[];
+          for(const tk of tickers){
+            try{
+              let url = `https://brapi.dev/api/quote/${tk}?range=1d&interval=1d&fundamentals=true` + (state.apiKey?`&token=${encodeURIComponent(state.apiKey)}`:'');
+              const j = await tryChain(proxiesFor(url), d => (d?.results || d?.stocks || []));
+              if(j.length){
+                const x = j[0];
+                out.push({
+                  ticker:(x.symbol||'').replace(/\.SA$/,'').toUpperCase(),
+                  name:x.longName||x.shortName||'',
+                  price:(x.regularMarketPrice ?? x.regularMarketPreviousClose ?? ''),
+                  dy:(typeof x.dividendYield==='number' ? x.dividendYield*100 : ''),
+                  divm:'', cotas:0
+                });
+              }
+            }catch(_){}
+            await sleep(120);
+          }
+          return out;
+        }
+      }
+    }
+
+    // ========= Fluxo de UI =========
+    async function doFetchAndMerge(list){
+      if(!list || !list.length){ toast('Informe ao menos um ticker'); return; }
+      el('loading').classList.add('show');
+      try{
+        const got = await fetchQuotes(list);
+        if(!got.length){
+          toast('Não consegui obter cotações (CORS/rede). Você pode editar manualmente preço/DY.', 'error');
+        }
+        list.forEach(tk=>{
+          const f = got.find(g=>g.ticker===tk);
+          const idx = state.rows.findIndex(r=>r.ticker===tk);
+          if(f){
+            if(idx>=0){ state.rows[idx] = {...state.rows[idx], ...f}; }
+            else{ state.rows.push(f); }
+          }else{
+            if(idx<0) state.rows.push({ticker:tk,name:'',price:'',dy:'',divm:'',cotas:0});
+          }
+        });
+        render(); save();
+        el('lastUpdated').textContent = nowStr();
+      }catch(e){
+        console.error(e);
+        toast('Falha ao buscar cotações. Motivo: '+e.message+'\nVocê pode editar manualmente.', 'error');
+      }finally{
+        el('loading').classList.remove('show');
+      }
+    }
+
+    function parseTickersInput(){ return el('tickers').value.trim().split(/[\s,;]+/).filter(Boolean).map(s=>s.toUpperCase()); }
+    function alloc(i){
+      const r = state.rows[i]; const p = Number(String(r.price).replace(',','.'))||0;
+      if(!p){ toast('Defina um preço para alocar.'); return; }
+      const add = Math.floor(state.aporte / p);
+      if(add<=0){ toast('Aporte insuficiente para 1 cota.'); return; }
+      const cur = Number(r.cotas)||0;
+      state.rows[i].cotas = cur + add;
+      render(); save();
+      toast(`Alocado: +${add} cota(s) em ${r.ticker}. ✔️`);
+    }
+
+    // ========= Auto refresh =========
+    function startAuto(){
+      stopAuto();
+      if(!state.auto) return;
+      state.timer = setInterval(async ()=>{
+        const list = state.rows.map(r=>r.ticker).filter(Boolean);
+        if(list.length) await doFetchAndMerge(list);
+      }, state.refresh*1000);
+    }
+    function stopAuto(){ if(state.timer){ clearInterval(state.timer); state.timer=null; } }
+
+    // ========= Events =========
+    el('btnFetch').addEventListener('click', async ()=>{
+      const list = parseTickersInput();
+      if(!list.length){ toast('Informe um ticker'); return; }
+      await doFetchAndMerge(list);
+    });
+    el('tickers').addEventListener('keydown', async (e)=>{
+      if(e.key==='Enter'){
+        const list = parseTickersInput();
+        if(list.length) await doFetchAndMerge(list);
+      }
+    });
+    el('btnAdd').addEventListener('click',()=>addRow());
+    el('btnSample').addEventListener('click',()=>{
+      state.rows=[
+        {ticker:'HCTR11',name:'Hectare CE',price:22.70,dy:17.8,divm:0.30,cotas:10},
+        {ticker:'RZAG11',name:'Riza Agro',price:8.90,dy:16.0,divm:0.13,cotas:20},
+        {ticker:'MXRF11',name:'Maxi Renda',price:9.50,dy:12.1,divm:0.10,cotas:30}
+      ];
+      render(); save();
+      toast('Exemplo carregado. Edite livremente.');
+    });
+    el('aporte').addEventListener('change',()=>{ state.aporte = Number(el('aporte').value)||300; render(); save(); });
+    el('toggleAuto').addEventListener('click',()=>{
+      state.auto = !state.auto;
+      el('toggleAuto').textContent = state.auto ? 'Pausar' : 'Retomar';
+      save();
+      if(state.auto){ startAuto(); toast('Auto-atualização ativada'); }
+      else{ stopAuto(); toast('Auto-atualização pausada'); }
+    });
+    el('btnSaveKey').addEventListener('click',()=>{
+      state.apiKey = el('apiKey').value.trim();
+      save();
+      toast(state.apiKey ? 'Chave brapi salva. 👌' : 'Chave removida.');
+    });
+    el('btnTest').addEventListener('click', async ()=>{
+      el('loading').classList.add('show');
+      try{
+        const testList = ['MXRF11'];
+        const got = await fetchQuotes(testList);
+        toast(got.length ? 'Conexão OK. ✔️' : 'Sem dados. Verifique internet/CORS.');
+      }catch(e){ toast('Erro no teste: '+e.message, 'error'); }
+      finally{ el('loading').classList.remove('show'); }
+    });
+
+    // ========= Init =========
+    load();
+    startAuto();
+    window.alloc = alloc;
+    window.onEdit = (i,k,v)=>{ state.rows[i][k]=v; render(); save(); };
+  </script>
+</body>
+</html>
