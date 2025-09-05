@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FIIs • Calculadora Dinâmica (v1.2)</title>
+  <title>FIIs • Calculadora Dinâmica (v1.3)</title>
   <style>
     :root{
       --bg:#0a0f24; --panel:#0f1532; --muted:#182151; --text:#e9ecf4; --sub:#b9c2e6;
@@ -33,9 +33,9 @@
     .pill{background:var(--chip);border:1px solid #233069;color:var(--sub);padding:6px 10px;border-radius:999px;font-size:12px}
     .stat{display:flex;gap:6px;align-items:center}
     .stat b{font-size:16px}
-    table{width:100%;border-collapse:separate;border-spacing:0}
+    table{width:100%;border-collapse:separate;border-spacing:0;table-layout:auto}
     thead th{position:sticky;top:0;z-index:1;background:var(--table-head);text-align:left;font-weight:700;border-bottom:1px solid #263272}
-    th,td{padding:10px 8px}
+    th,td{padding:10px 6px}
     tbody tr{border-bottom:1px solid #1e2a66}
     tbody tr:hover{background:rgba(255,255,255,.03)}
     .num{text-align:right}
@@ -56,14 +56,22 @@
     .toast{position:fixed;right:16px;bottom:16px;max-width:420px;background:#10163a;border:1px solid #2a3a86;color:var(--text);padding:12px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);display:none;white-space:pre-wrap}
     .toast.show{display:block}
     .cfg{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
-    @media (max-width:720px){ .controls .grow{min-width:100%} thead .hide-sm{display:none} tbody .hide-sm{display:none} }
+    /* Mobile tweaks: esconder colunas para não rolar para o lado */
+    @media (max-width:720px){
+      .controls .grow{min-width:100%}
+      thead .hide-sm{display:none}
+      tbody .hide-sm{display:none}
+      th,td{padding:8px 4px}
+      .tinput{font-size:12px;padding:6px 6px}
+      .btn{padding:8px 10px}
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>FIIs • Calculadora Dinâmica <span class="small" style="opacity:.7">v1.2</span></h1>
-      <div class="subtitle">Compare tickers, preços do dia (auto-atualiza) e renda mensal estimada.</div>
+      <h1>FIIs • Calculadora Dinâmica <span class="small" style="opacity:.7">v1.3</span></h1>
+      <div class="subtitle">FIIs com último dividendo automático via Yahoo. Layout otimizado para celular (sem rolagem lateral).</div>
       <div class="controls">
         <input id="tickers" class="grow" placeholder="Ex.: HCTR11, RZAG11, MXRF11 (separe por vírgula ou espaço)" />
         <button class="btn" id="btnFetch">Buscar + Calcular</button>
@@ -81,7 +89,7 @@
         <div class="loading" id="loading"><span class="dot"></span><span>Atualizando cotações…</span></div>
         <div class="small right">Dica: cole tickers e pressione <span class="kbd">Enter</span>.</div>
       </div>
-      <div class="small" style="margin-top:6px;opacity:.8">Projetado para abrir como <code>file://</code> ou <code>content://</code> (Android) com múltiplos proxies CORS.</div>
+      <div class="small" style="margin-top:6px;opacity:.8">Fontes: Yahoo (preço + último dividendo via <code>events=div</code>) e brapi (opcional).</div>
     </div>
 
     <div class="card">
@@ -94,22 +102,22 @@
         <table>
           <thead>
             <tr>
-              <th style="min-width:120px">Ticker</th>
-              <th style="min-width:220px">Nome</th>
-              <th class="num" style="min-width:110px">Preço</th>
-              <th class="num hide-sm" style="min-width:110px">DY % a.a.</th>
-              <th class="num" style="min-width:120px">Div/Mês</th>
-              <th class="num" style="min-width:140px">Cotas (editável)</th>
-              <th class="num hide-sm" style="min-width:120px">Gasto</th>
-              <th class="num" style="min-width:140px">Renda/Mês</th>
-              <th style="min-width:90px"></th>
+              <th style="min-width:110px">Ticker</th>
+              <th class="hide-sm" style="min-width:200px">Nome</th>
+              <th class="num" style="min-width:95px">Preço</th>
+              <th class="num hide-sm" style="min-width:95px">DY % a.a.</th>
+              <th class="num" style="min-width:100px">Div/Mês</th>
+              <th class="num" style="min-width:120px">Cotas</th>
+              <th class="num hide-sm" style="min-width:110px">Gasto</th>
+              <th class="num" style="min-width:120px">Renda/Mês</th>
+              <th style="min-width:70px"></th>
             </tr>
           </thead>
           <tbody id="body"></tbody>
         </table>
       </div>
       <div class="footer" style="margin-top:10px">
-        <div class="small">Fontes: brapi.dev (preferencial) • Yahoo via proxies (AllOrigins/ThingProxy/Isomorphic). Preços podem ter atraso.</div>
+        <div class="small">Sem rolagem lateral no celular: escondemos “Nome”, “DY” e “Gasto”.</div>
         <div class="small">Auto-atualização a cada <span id="refreshSec">30</span>s <button id="toggleAuto" class="btn ghost" style="padding:6px 10px">Pausar</button></div>
       </div>
     </div>
@@ -157,9 +165,7 @@
 
     function calc(r){
       const p = Number(String(r.price).toString().replace(',','.'))||0;
-      const dy = Number(String(r.dy).toString().replace(',','.'))||0;
       let d = Number(String(r.divm).toString().replace(',','.'))||0;
-      if(!d && p>0 && dy>0){ d = (dy/100)*p/12; }
       const c = Number(r.cotas)||0;
       const gasto = c*p;
       const renda = c*d;
@@ -175,7 +181,7 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><input class="tinput" value="${r.ticker||''}" onchange="onEdit(${i},'ticker',this.value.toUpperCase())"/></td>
-          <td><input class="tinput" value="${r.name||''}" onchange="onEdit(${i},'name',this.value)"/></td>
+          <td class="hide-sm"><input class="tinput" value="${r.name||''}" onchange="onEdit(${i},'name',this.value)"/></td>
           <td class="num"><input class="tinput" value="${r.price||''}" onchange="onEdit(${i},'price',this.value)"/></td>
           <td class="num hide-sm"><input class="tinput" value="${r.dy||''}" onchange="onEdit(${i},'dy',this.value)"/></td>
           <td class="num"><input class="tinput" value="${r.divm||''}" onchange="onEdit(${i},'divm',this.value)"/></td>
@@ -184,8 +190,8 @@
           <td class="num">${renda?fmtBRL(renda):'-'}</td>
           <td>
             <div class="row-actions">
-              <button class="btn ghost" onclick="alloc(${i})" title="Alocar aporte para este ativo">Alocar</button>
-              <button class="btn del" onclick="removeRow(${i})" title="Remover">Remover</button>
+              <button class="btn ghost" onclick="alloc(${i})" title="Alocar aporte">Alocar</button>
+              <button class="btn del" onclick="removeRow(${i})" title="Remover">×</button>
             </div>
           </td>`;
         tbody.appendChild(tr);
@@ -195,7 +201,7 @@
     }
     window.onEdit = (i,k,v)=>{ state.rows[i][k]=v; render(); save(); };
 
-    // ========= Networking with multi-proxy fallbacks (works from file:// / content://) =========
+    // ========= Networking with dividends from Yahoo =========
     const sleep = ms => new Promise(r=>setTimeout(r,ms));
     const withTimeout = (p,ms=12000)=> Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);
     async function getJSON(url, opt={}){
@@ -203,7 +209,14 @@
       if(!r.ok) throw new Error('HTTP '+r.status+' em '+url);
       return r.json();
     }
-    // Try a chain of URLs until one works
+    function proxiesFor(url){
+      return [
+        url,
+        'https://cors.isomorphic-git.org/' + url,
+        'https://thingproxy.freeboard.io/fetch/' + url,
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
+      ];
+    }
     async function tryChain(urls, parser){
       let lastErr = null;
       for(const u of urls){
@@ -215,24 +228,40 @@
       throw lastErr || new Error('Falha em todos os proxies');
     }
 
-    // Build proxy list for an URL
-    function proxiesFor(url){
-      return [
-        url, // direto (quando CORS permite)
-        'https://cors.isomorphic-git.org/' + url,
-        'https://thingproxy.freeboard.io/fetch/' + url,
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
-      ];
+    async function fetchFromYahooQuotes(tickers){
+      const syms = tickers.map(t=>t+'.SA').join(',');
+      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(syms);
+      const j = await tryChain(proxiesFor(url));
+      const arr = (j.quoteResponse && j.quoteResponse.result) || [];
+      return arr.map(q=>({
+        ticker:(q.symbol||'').replace(/\.SA$/,'').toUpperCase(),
+        name:q.longName||q.shortName||'',
+        price:q.regularMarketPrice ?? q.regularMarketPreviousClose ?? '',
+        dy:(q.trailingAnnualDividendYield? q.trailingAnnualDividendYield*100 : ''),
+        divm:'',
+        cotas:0
+      }));
     }
 
-    async function fetchFromBrapi(tickers){
+    async function fetchLastDividendYahoo(ticker){ // retorna valor do último dividendo (R$/cota)
+      const sym = ticker+'.SA';
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1d&events=div`;
+      const data = await tryChain(proxiesFor(url));
+      const res = data?.chart?.result?.[0];
+      const events = res?.events?.dividends || null;
+      if(!events) return '';
+      const list = Object.values(events).sort((a,b)=>b.date - a.date);
+      const last = list[0];
+      const amount = last?.amount;
+      return (typeof amount === 'number' ? amount : '');
+    }
+
+    async function fetchBrapi(tickers){
       const results = [];
       for(let i=0;i<tickers.length;i+=20){
         const group = tickers.slice(i,i+20);
-        let url = `https://brapi.dev/api/quote/${encodeURIComponent(group.join(','))}?range=1d&interval=1d&fundamentals=true`;
-        if(state.apiKey) url += `&token=${encodeURIComponent(state.apiKey)}`;
-        const urls = proxiesFor(url);
-        const j = await tryChain(urls, d => (d?.results || d?.stocks || d?.data || []));
+        let url = `https://brapi.dev/api/quote/${encodeURIComponent(group.join(','))}?range=1d&interval=1d&fundamentals=true` + (state.apiKey?`&token=${encodeURIComponent(state.apiKey)}`:'');
+        const j = await tryChain(proxiesFor(url), d => (d?.results || d?.stocks || d?.data || []));
         j.forEach(x=>{
           results.push({
             ticker: (x.symbol||'').replace(/\.SA$/,'').toUpperCase(),
@@ -246,58 +275,29 @@
       return results;
     }
 
-    async function fetchFromYahoo(tickers){
-      const syms = tickers.map(t=>t+'.SA').join(',');
-      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(syms);
-      const urls = proxiesFor(url);
-      const j = await tryChain(urls);
-      const arr = (j.quoteResponse && j.quoteResponse.result) || [];
-      return arr.map(q=>({
-        ticker:(q.symbol||'').replace(/\.SA$/,'').toUpperCase(),
-        name:q.longName||q.shortName||'',
-        price:q.regularMarketPrice ?? q.regularMarketPreviousClose ?? '',
-        dy:(q.trailingAnnualDividendYield? q.trailingAnnualDividendYield*100 : ''),
-        divm:'',
-        cotas:0
-      }));
-    }
-
-    async function fetchQuotes(list){
-      const tickers = list.map(s=>s.trim().toUpperCase().replace(/\.SA$/,'')).filter(Boolean);
+    async function fetchQuotesAndDividends(rawList){
+      const tickers = rawList.map(s=>s.trim().toUpperCase().replace(/\.SA$/,'')).filter(Boolean);
       if(!tickers.length) return [];
-      try{
-        const got = await fetchFromBrapi(tickers);
-        if(got.length) return got;
-        throw new Error('brapi vazio');
-      }catch(e){
-        console.warn('brapi falhou:', e);
-        try{
-          const y = await fetchFromYahoo(tickers);
-          if(y.length) return y;
-          throw new Error('yahoo vazio');
-        }catch(e2){
-          console.warn('yahoo falhou:', e2);
-          const out=[];
-          for(const tk of tickers){
-            try{
-              let url = `https://brapi.dev/api/quote/${tk}?range=1d&interval=1d&fundamentals=true` + (state.apiKey?`&token=${encodeURIComponent(state.apiKey)}`:'');
-              const j = await tryChain(proxiesFor(url), d => (d?.results || d?.stocks || []));
-              if(j.length){
-                const x = j[0];
-                out.push({
-                  ticker:(x.symbol||'').replace(/\.SA$/,'').toUpperCase(),
-                  name:x.longName||x.shortName||'',
-                  price:(x.regularMarketPrice ?? x.regularMarketPreviousClose ?? ''),
-                  dy:(typeof x.dividendYield==='number' ? x.dividendYield*100 : ''),
-                  divm:'', cotas:0
-                });
-              }
-            }catch(_){}
-            await sleep(120);
-          }
-          return out;
+      let base = [];
+      try{ base = await fetchBrapi(tickers); }catch(_){ /* ignore */ }
+      if(!base.length){
+        try{ base = await fetchFromYahooQuotes(tickers); }catch(_){}
+      }
+      if(!base.length){ base = tickers.map(tk=>({ticker:tk,name:'',price:'',dy:'',divm:'',cotas:0})); }
+      // Buscar último dividendo por ticker (limitar concorrência)
+      const limit = 3;
+      const queue = [...base];
+      async function worker(){
+        while(queue.length){
+          const item = queue.shift();
+          try{
+            const val = await fetchLastDividendYahoo(item.ticker);
+            if(val) item.divm = val;
+          }catch(_){ /* segue sem divm */ }
         }
       }
+      await Promise.all(Array.from({length:limit}, ()=>worker()));
+      return base;
     }
 
     // ========= Fluxo de UI =========
@@ -305,10 +305,7 @@
       if(!list || !list.length){ toast('Informe ao menos um ticker'); return; }
       el('loading').classList.add('show');
       try{
-        const got = await fetchQuotes(list);
-        if(!got.length){
-          toast('Não consegui obter cotações (CORS/rede). Você pode editar manualmente preço/DY.', 'error');
-        }
+        const got = await fetchQuotesAndDividends(list);
         list.forEach(tk=>{
           const f = got.find(g=>g.ticker===tk);
           const idx = state.rows.findIndex(r=>r.ticker===tk);
@@ -323,7 +320,7 @@
         el('lastUpdated').textContent = nowStr();
       }catch(e){
         console.error(e);
-        toast('Falha ao buscar cotações. Motivo: '+e.message+'\nVocê pode editar manualmente.', 'error');
+        toast('Falha ao buscar cotações/dividendos. Motivo: '+e.message+'\nVocê pode editar manualmente.', 'error');
       }finally{
         el('loading').classList.remove('show');
       }
@@ -391,8 +388,9 @@
       el('loading').classList.add('show');
       try{
         const testList = ['MXRF11'];
-        const got = await fetchQuotes(testList);
-        toast(got.length ? 'Conexão OK. ✔️' : 'Sem dados. Verifique internet/CORS.');
+        const got = await fetchQuotesAndDividends(testList);
+        const hasDiv = (got[0] && got[0].divm);
+        toast(got.length ? ('Conexão OK. ' + (hasDiv? 'Último dividendo carregado ✔️' : 'Sem evento de dividendo recente.')) : 'Sem dados. Verifique internet/CORS.');
       }catch(e){ toast('Erro no teste: '+e.message, 'error'); }
       finally{ el('loading').classList.remove('show'); }
     });
@@ -405,3 +403,4 @@
   </script>
 </body>
 </html>
+```0
